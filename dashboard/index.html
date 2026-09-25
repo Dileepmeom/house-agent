@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kassel Wohnungssuche</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --border: #e3e6ea; --text: #1c2128;
+    --muted: #6b7280; --accent: #2563eb; --green: #16a34a; --red: #dc2626;
+    --amber: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 16px 24px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  .meta-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  #syncBtn { background: var(--accent); color: white; }
+  #syncBtn:disabled { opacity: 0.6; cursor: default; }
+  .stats { display: flex; gap: 12px; padding: 16px 24px; flex-wrap: wrap; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; min-width: 110px; }
+  .stat .n { font-size: 22px; font-weight: 700; }
+  .stat .l { font-size: 12px; color: var(--muted); }
+  .layout { display: grid; grid-template-columns: 1fr 420px; gap: 16px; padding: 0 24px 24px; }
+  #map { height: 420px; border-radius: 10px; border: 1px solid var(--border); }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .panel h2 { font-size: 14px; margin: 0; }
+  select { font: inherit; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; background: white; }
+  .action-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+  .action-item.highlight { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+  .action-item .t { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .action-item .d { font-size: 12px; color: var(--muted); white-space: pre-wrap; margin-bottom: 8px; }
+  .action-item textarea { width: 100%; min-height: 80px; font: inherit; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; padding: 6px; }
+  .links-row { display: flex; gap: 10px; font-size: 12px; margin-bottom: 6px; }
+  .btn-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 12px; border: none; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  .btn-approve { background: var(--green); color: white; }
+  .btn-dismiss { background: #e5e7eb; color: #374151; }
+  .btn-edit { background: var(--accent); color: white; }
+  .btn-send { background: #0f766e; color: white; }
+  .btn-send-all { background: #0f766e; color: white; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #f1f5f9; }
+  tbody tr.highlight { background: #dbeafe; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.new { background: #dbeafe; color: #1d4ed8; }
+  .badge.pending_review, .badge.approved { background: #fef3c7; color: #92400e; }
+  .badge.applied, .badge.auto_applied { background: #dcfce7; color: #15803d; }
+  .badge.viewing_scheduled, .badge.viewing_done { background: #ede9fe; color: #6d28d9; }
+  .badge.docs_requested { background: #ffedd5; color: #c2410c; }
+  .badge.offered { background: #dcfce7; color: #15803d; }
+  .badge.rejected { background: #fee2e2; color: #b91c1c; }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  a { color: var(--accent); }
+  .email-item { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; }
+  .email-item .subj { font-weight: 600; margin-bottom: 2px; }
+  .email-item .sub-meta { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏠 Kassel Wohnungssuche</h1>
+  <div class="meta-row">
+    <span id="lastSynced">—</span>
+    <button id="searchBtn" onclick="searchNew()">Search new properties</button>
+    <button id="syncBtn" onclick="syncNow()">Sync Gmail</button>
+  </div>
+</header>
+
+<div class="stats" id="stats"></div>
+
+<div class="layout">
+  <div>
+    <div class="panel">
+      <h2>Listings map</h2>
+      <div id="map"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>All listings</h2>
+        <select id="statusFilter" onchange="renderListings(lastListings)">
+          <option value="all">All statuses</option>
+        </select>
+      </div>
+      <table>
+        <thead><tr><th>Address</th><th>District</th><th>Rent</th><th>Floor</th><th>Move-in</th><th>Status</th></tr></thead>
+        <tbody id="listingsBody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Recent emails</h2>
+      <div id="emails"></div>
+    </div>
+  </div>
+  <div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Needs your input</h2>
+        <button class="btn-send-all" onclick="sendAllApproved()">Send all approved</button>
+      </div>
+      <div id="actions"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";
+let map, markersLayer, markersById = {};
+let lastListings = [];
+
+function statusBadge(s) {
+  if (!s) return '<span class="badge new">new</span>';
+  return `<span class="badge ${s}">${s.replace(/_/g,' ')}</span>`;
+}
+
+function fmtRelative(iso) {
+  if (!iso) return 'never';
+  const d = new Date(iso);
+  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return d.toLocaleString();
+}
+
+async function loadDashboard() {
+  const res = await fetch(`${API}/api/dashboard`);
+  const data = await res.json();
+
+  document.getElementById('lastSynced').textContent =
+    'Gmail synced ' + fmtRelative(data.last_gmail_sync) + ' · dashboard updated ' + fmtRelative(data.last_updated);
+
+  lastListings = data.listings;
+  renderStats(data.stats);
+  populateStatusFilter(data.listings);
+  renderListings(data.listings);
+  renderMap(data.listings);
+  renderActions(data.actions);
+  renderEmails(data.recent_emails);
+}
+
+function renderStats(stats) {
+  const items = [
+    ['total', 'Total listings'],
+    ['active', 'Active apps'],
+    ['viewings', 'Viewings'],
+    ['rejected', 'Rejected'],
+    ['new_matches', 'New matches'],
+    ['pending_actions', 'Needs input'],
+  ];
+  document.getElementById('stats').innerHTML = items.map(([k, l]) =>
+    `<div class="stat"><div class="n">${stats[k] ?? 0}</div><div class="l">${l}</div></div>`
+  ).join('');
+}
+
+function populateStatusFilter(listings) {
+  const sel = document.getElementById('statusFilter');
+  const current = sel.value || 'all';
+  const statuses = Array.from(new Set(listings.map(l => l.app_status || 'new'))).sort();
+  sel.innerHTML = '<option value="all">All statuses</option>' +
+    statuses.map(s => `<option value="${s}">${s.replace(/_/g,' ')}</option>`).join('');
+  sel.value = statuses.includes(current) || current === 'all' ? current : 'all';
+}
+
+function renderListings(listings) {
+  const filter = document.getElementById('statusFilter').value || 'all';
+  const filtered = filter === 'all'
+    ? listings
+    : listings.filter(l => (l.app_status || 'new') === filter);
+
+  const floorCell = (l) => {
+    const label = l.floor || (l.floor_number != null ? l.floor_number + '. OG' : '—');
+    const tooHigh = l.floor_number != null && l.floor_number > 3;
+    const top = /DG|top/i.test(l.floor || '');
+    const color = tooHigh ? 'var(--red)' : top ? 'var(--amber)' : 'inherit';
+    return `<span style="color:${color};font-weight:${tooHigh||top?600:400}">${label}</span>`;
+  };
+
+  document.getElementById('listingsBody').innerHTML = filtered.map(l => `
+    <tr data-listing-id="${l.id}" onclick="focusListing('${l.id}')">
+      <td>${l.link ? `<a href="${l.link}" target="_blank" onclick="event.stopPropagation()">${l.address}</a>` : l.address}</td>
+      <td>${l.district || '—'}</td>
+      <td>${l.rent_display || (l.rent_warm ? '€' + l.rent_warm : '—')}</td>
+      <td>${floorCell(l)}</td>
+      <td>${l.availability_date || '—'}</td>
+      <td>${statusBadge(l.app_status)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" class="empty">No listings match this filter.</td></tr>';
+}
+
+function renderMap(listings) {
+  if (!map) {
+    map = L.map('map').setView([51.3127, 9.4797], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    markersLayer = L.layerGroup().addTo(map);
+  }
+  markersLayer.clearLayers();
+  markersById = {};
+  listings.forEach(l => {
+    if (l.latitude == null || l.longitude == null) return;
+    const marker = L.marker([l.latitude, l.longitude]).addTo(markersLayer)
+      .bindPopup(`<b>${l.address}</b><br>${l.rent_display || ''}<br>${l.app_status || 'new'}`);
+    markersById[l.id] = marker;
+  });
+}
+
+function focusListing(listingId) {
+  document.querySelectorAll('#listingsBody tr').forEach(tr =>
+    tr.classList.toggle('highlight', tr.dataset.listingId === listingId));
+  const marker = markersById[listingId];
+  if (marker) {
+    map.setView(marker.getLatLng(), 14, { animate: true });
+    marker.openPopup();
+    document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function renderActions(actions) {
+  const el = document.getElementById('actions');
+  if (!actions.length) {
+    el.innerHTML = '<div class="empty">Nothing needs your attention right now.</div>';
+    return;
+  }
+  el.innerHTML = actions.map(a => {
+    const links = [];
+    if (a.link) links.push(`<a href="${a.link}" target="_blank">View listing ↗</a>`);
+    if (a.gmail_thread_id) links.push(`<a href="https://mail.google.com/mail/u/0/#all/${a.gmail_thread_id}" target="_blank">Open email ↗</a>`);
+    const canSend = a.action_type === 'review_application' && a.status === 'approved';
+    return `
+    <div class="action-item" data-id="${a.id}" data-listing-id="${a.listing_id || ''}"
+         onmouseenter="focusListing('${a.listing_id || ''}')">
+      <div class="t">${a.title}</div>
+      ${links.length ? `<div class="links-row">${links.join(' · ')}</div>` : ''}
+      <div class="d">${a.description || ''}</div>
+      ${a.proposed_reply_de ? `<textarea id="reply-${a.id}">${a.proposed_reply_de}</textarea>` : ''}
+      <div class="btn-row">
+        <button class="btn-approve" onclick="respond(${a.id}, 'approve')">Approve</button>
+        ${a.proposed_reply_de ? `<button class="btn-edit" onclick="respond(${a.id}, 'edit')">Save edits & approve</button>` : ''}
+        ${canSend ? `<button class="btn-send" onclick="sendOne(${a.id})">Send now</button>` : ''}
+        <button class="btn-dismiss" onclick="respond(${a.id}, 'dismiss')">Dismiss</button>
+      </div>
+    </div>
+  `;
+  }).join('');
+}
+
+function renderEmails(emails) {
+  const el = document.getElementById('emails');
+  if (!emails || !emails.length) {
+    el.innerHTML = '<div class="empty">No emails synced yet. Click "Sync Gmail" above.</div>';
+    return;
+  }
+  el.innerHTML = emails.map(e => {
+    const links = [];
+    if (e.gmail_thread_id) links.push(`<a href="https://mail.google.com/mail/u/0/#all/${e.gmail_thread_id}" target="_blank">Open in Gmail ↗</a>`);
+    if (e.listing_link) links.push(`<a href="${e.listing_link}" target="_blank">View listing ↗</a>`);
+    return `
+    <div class="email-item">
+      <div class="subj">${e.subject || '(no subject)'} ${statusBadge(e.event_type)}</div>
+      <div class="sub-meta">${e.listing_address || e.sender || ''} · ${fmtRelative(e.received_at)}</div>
+      ${links.length ? `<div class="links-row">${links.join(' · ')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function respond(id, action) {
+  const body = { action };
+  if (action === 'edit') {
+    const ta = document.getElementById(`reply-${id}`);
+    body.action = 'edit';
+    body.edited_reply = ta ? ta.value : null;
+  }
+  const res = await fetch(`${API}/api/actions/${id}/respond`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const result = await res.json();
+  if (result.message) alert(result.message);
+  loadDashboard();
+}
+
+async function sendOne(id) {
+  if (!confirm('Send this application to the landlord now? This cannot be undone.')) return;
+  const res = await fetch(`${API}/api/actions/${id}/send`, { method: 'POST' });
+  const result = await res.json();
+  alert(result.detail || result.status || JSON.stringify(result));
+  loadDashboard();
+}
+
+async function sendAllApproved() {
+  if (!confirm('Send every approved application to its landlord now? This cannot be undone.')) return;
+  const res = await fetch(`${API}/api/actions/send-all-approved`, { method: 'POST' });
+  const result = await res.json();
+  alert(`Attempted ${result.attempted ?? 0} send(s). See console for details.`);
+  console.log(result);
+  loadDashboard();
+}
+
+const IMMOSCOUT_SEARCH_URL =
+  "https://www.immobilienscout24.de/Suche/radius/wohnung-mieten" +
+  "?centerofsearchaddress=Kassel&numberofrooms=3.0-&price=-1100.0" +
+  "&pricetype=calculatedtotalrent&floor=2-3&geocoordinates=51.31292%3B9.49829%3B5.0";
+
+function searchNew() {
+  // Opens the ImmoScout search in a new tab. If the Chrome extension is
+  // installed and you're logged in, its green bar there will scrape the
+  // results and send them back here. Then refresh this dashboard.
+  window.open(IMMOSCOUT_SEARCH_URL, '_blank');
+}
+
+async function syncNow() {
+  const btn = document.getElementById('syncBtn');
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  try {
+    const res = await fetch(`${API}/api/sync`, { method: 'POST' });
+    const result = await res.json();
+    if (!res.ok) {
+      alert(result.detail || 'Sync failed');
+    } else {
+      alert(`Synced. ${result.new_events} new email event(s) found.`);
+    }
+  } catch (e) {
+    alert('Sync failed: ' + e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sync Gmail';
+    loadDashboard();
+  }
+}
+
+loadDashboard();
+setInterval(loadDashboard, 60000);
+</script>
+
+</body>
+</html>

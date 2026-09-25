@@ -1,0 +1,22 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime data & state (recreated by src/database.py + src/seed.py)
+data/
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Secrets & personal data — NEVER commit these
+config/*.json
+!config/profile.example.json   # keep the placeholder template
+
+# Playwright browser session (machine-specific, may hold your login)
+data/browser_profile/
+
+# OS
+.DS_Store

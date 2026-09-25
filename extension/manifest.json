@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Kassel Wohnungssuche Connector",
+  "version": "1.0.0",
+  "description": "Capture ImmoScout24 listings into your Kassel Agent dashboard and autofill your German application — you stay logged in as yourself and click send.",
+  "permissions": ["storage", "tabs", "activeTab"],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://www.immobilienscout24.de/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Kassel Agent"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.immobilienscout24.de/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

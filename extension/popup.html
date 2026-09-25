@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px -apple-system, Segoe UI, sans-serif; width: 280px; margin: 0; padding: 14px; color: #1c2128; }
+  h1 { font-size: 14px; margin: 0 0 10px; }
+  .row { margin-bottom: 10px; }
+  label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 3px; }
+  input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+  button { width: 100%; padding: 8px; border: none; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+  .primary { background: #0f766e; color: #fff; }
+  .secondary { background: #2563eb; color: #fff; }
+  #status { font-size: 12px; padding: 8px; border-radius: 6px; background: #f3f4f6; min-height: 18px; }
+  .ok { color: #15803d; }
+  .err { color: #b91c1c; }
+</style>
+</head>
+<body>
+  <h1>🏠 Kassel Agent</h1>
+
+  <div class="row">
+    <label>Backend URL</label>
+    <input id="backend" value="http://localhost:8000" />
+  </div>
+
+  <button id="connect" class="primary">Connect</button>
+  <button id="search" class="secondary">Search new properties on ImmoScout24</button>
+
+  <div id="status">Not connected yet.</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
