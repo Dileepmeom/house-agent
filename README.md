@@ -54,6 +54,8 @@ house-agent/
 │   │                             #   (endpoints: /api/dashboard, /api/listings/ingest,
 │   │                             #    /api/application-draft, /api/sync, /api/extension/ping …)
 │   ├── seed.py                   # Seed the DB with your existing tracked applications
+│   ├── export_data.py            # Export whole DB state to a portable JSON snapshot
+│   ├── import_data.py            # Load a snapshot into the DB (merge or --replace)
 │   ├── draft_new.py              # Draft applications for any listing without one yet
 │   ├── scraper_immoscout.py      # (Optional) Playwright scraper + manual send helper
 │   ├── gmail_checker.py          # (Optional) Gmail API reader + reply classifier
@@ -173,6 +175,27 @@ Open the dashboard at **http://localhost:8000/dashboard/**
   ImmoScout's own Send button.**
 
 ---
+
+## Moving your data between machines
+
+Your captured listings, drafts, statuses and enrichment live in the local
+`data/kassel.db` (git-ignored — it doesn't travel with the repo). To carry that
+state to another laptop, use the JSON snapshot scripts:
+
+```bash
+# On the OLD machine — write a portable snapshot:
+python src/export_data.py                 # -> data/kassel_export.json
+
+# copy data/kassel_export.json to the new machine (USB, cloud, scp…)
+
+# On the NEW machine (after clone + install + database.py):
+python src/import_data.py path/to/kassel_export.json            # merge (safe, idempotent)
+python src/import_data.py path/to/kassel_export.json --replace  # exact restore
+```
+
+**Merge** (default) inserts/updates by primary key and never deletes local rows —
+safe to run repeatedly. **--replace** wipes each table first for an exact restore.
+Re-run `export_data.py` whenever you want a fresh backup.
 
 ## Optional: Gmail reply tracking
 
