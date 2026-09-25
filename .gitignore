@@ -13,7 +13,8 @@ data/
 
 # Secrets & personal data — NEVER commit these
 config/*.json
-!config/profile.example.json   # keep the placeholder template
+# ...but keep the placeholder template:
+!config/profile.example.json
 
 # Playwright browser session (machine-specific, may hold your login)
 data/browser_profile/

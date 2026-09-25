@@ -1,0 +1,14 @@
+{
+  "name": "Your Full Name",
+  "phone": "+49 000 0000000",
+  "email": "you@example.com",
+  "employer": "Your Employer GmbH",
+  "position": "Your Position",
+  "contract_type": "unbefristet",
+  "gross_annual": "00.000",
+  "household": "X Personen (z. B. Ehepaar + Kind)",
+  "move_in": "sofort / nach Vereinbarung",
+  "pets": "Keine",
+  "smoker": "Nein",
+  "instruments": "Keine"
+}
