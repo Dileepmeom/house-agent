@@ -59,6 +59,7 @@ def run():
         test_status_filter(page)
         test_row_click_focuses_map(page)
         test_marker_hover_highlights_row(page)
+        test_marker_hover_no_scroll_jump(page)
         test_view_listing_hrefs(page)
         test_action_cards_render(page)
         test_open_approved_button(page)
@@ -142,6 +143,23 @@ def test_marker_hover_highlights_row(page):
     record("marker_hover_highlights_row",
            "Hovering a map marker highlights its row in the table below",
            before == 0 and after >= 1, f"highlighted rows before={before}, after={after}")
+
+
+def test_marker_hover_no_scroll_jump(page):
+    """Expected (regression): hovering a map marker highlights the row but must
+    NOT scroll/jump the page — hover-scroll fights the user's own scrolling."""
+    page.evaluate("window.scrollTo(0, 700)")
+    page.wait_for_timeout(200)
+    before = page.evaluate("window.scrollY")
+    page.evaluate("""() => {
+        const i = document.querySelector('.leaflet-marker-icon');
+        if (i) i.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
+    }""")
+    page.wait_for_timeout(500)
+    after = page.evaluate("window.scrollY")
+    record("marker_hover_no_scroll_jump",
+           "Marker hover highlights the row WITHOUT scrolling the page",
+           before == after, f"scrollY {before} -> {after}")
 
 
 def test_view_listing_hrefs(page):

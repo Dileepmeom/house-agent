@@ -198,7 +198,8 @@ function renderListings(listings) {
 
 function renderMap(listings) {
   if (!map) {
-    map = L.map('map').setView([51.3127, 9.4797], 12);
+    // scrollWheelZoom off so the map never hijacks page scrolling (use +/- to zoom).
+    map = L.map('map', { scrollWheelZoom: false }).setView([51.3127, 9.4797], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
@@ -210,9 +211,10 @@ function renderMap(listings) {
     if (l.latitude == null || l.longitude == null) return;
     const marker = L.marker([l.latitude, l.longitude]).addTo(markersLayer)
       .bindPopup(`<b>${l.address}</b><br>${l.rent_display || ''}<br>${l.app_status || 'new'}`);
-    // Hover/click a marker -> highlight and scroll to its row in the table below.
-    marker.on('mouseover', () => { marker.openPopup(); highlightRow(l.id, true); });
-    marker.on('click', () => highlightRow(l.id, true));
+    // Hover = highlight the row only (NO scroll — scrolling on hover fights the
+    // user as the cursor crosses stacked markers). Click = highlight + scroll.
+    marker.on('mouseover', () => highlightRow(l.id, false));
+    marker.on('click', () => { marker.openPopup(); highlightRow(l.id, true); });
     markersById[l.id] = marker;
   });
 }
@@ -269,7 +271,7 @@ function renderActions(actions) {
     let buttons;
     if (isApproved && isApp) {
       const openBtn = a.link
-        ? `<button class="btn-send" onclick="window.open('${a.link}','_blank')">Open to apply ↗</button>`
+        ? `<a class="btn-send" style="text-decoration:none;display:inline-block" href="${a.link}" target="_blank" rel="noopener">Open to apply ↗</a>`
         : `<span style="font-size:11px;color:var(--muted)">no ImmoScout link — apply manually</span>`;
       buttons = `
         ${openBtn}
