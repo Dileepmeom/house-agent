@@ -63,6 +63,7 @@ def run():
         test_view_listing_hrefs(page)
         test_action_cards_render(page)
         test_open_approved_button(page)
+        test_ingest_endpoint(page)
         test_sync_button(page)
         test_search_button(page)
         test_recent_emails_panel(page)
@@ -194,6 +195,26 @@ def test_open_approved_button(page):
     ok = exists and len(opened) > 0 and all("immobilienscout24.de" in u for u in opened)
     record("open_approved_button", "Opens all approved-with-link listings in tabs", ok,
            f"button={exists}, opened {len(opened)} listing tabs")
+
+
+def test_ingest_endpoint(page):
+    """Expected (regression): POST /api/listings/ingest accepts a listings body
+    and returns 200. Guards against the decorator being attached to the wrong
+    function (which made the endpoint demand a bogus 'addr' query param -> 422)."""
+    res = page.evaluate("""async () => {
+        const r = await fetch('/api/listings/ingest', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({listings: [{source_id: 'TESTINGEST1', rent_warm: 900, rooms: 3}]})
+        });
+        return {status: r.status, body: await r.json()};
+    }""")
+    ok = res["status"] == 200 and res["body"].get("received") == 1
+    with get_conn() as conn:  # cleanup the test row
+        conn.execute("DELETE FROM action_queue WHERE listing_id LIKE 'immoscout24_TESTINGEST%'")
+        conn.execute("DELETE FROM applications WHERE listing_id LIKE 'immoscout24_TESTINGEST%'")
+        conn.execute("DELETE FROM listings WHERE source_id LIKE 'TESTINGEST%'")
+    record("ingest_endpoint", "POST /api/listings/ingest accepts listings -> 200", ok,
+           f"status={res['status']}, body={res['body']}")
 
 
 def test_sync_button(page):

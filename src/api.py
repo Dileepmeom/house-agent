@@ -305,7 +305,6 @@ def application_draft(address: str = "", title: str = ""):
     return {"message": generate_application_message(address, title)}
 
 
-@app.post("/api/listings/ingest")
 def _district_from_address(addr: str | None) -> str | None:
     """Pull the district out of an address like
     'Silberbornstr. 29 A, Niederzwehren, Kassel' -> 'Niederzwehren'."""
@@ -319,6 +318,7 @@ def _district_from_address(addr: str | None) -> str | None:
     return None
 
 
+@app.post("/api/listings/ingest")
 def ingest_listings(body: IngestBody):
     """Receive listings the Chrome extension scraped from your logged-in
     ImmoScout24 session. Upsert them, and for strong matches (per your filter)
