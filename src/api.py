@@ -22,6 +22,7 @@ from database import (
     upsert_listing, create_application, create_action,
 )
 from application_template import generate_application_message
+from geo import geocode_district
 
 log = logging.getLogger("api")
 
@@ -352,6 +353,19 @@ def application_draft(address: str = "", title: str = ""):
 
 
 @app.post("/api/listings/ingest")
+def _district_from_address(addr: str | None) -> str | None:
+    """Pull the district out of an address like
+    'Silberbornstr. 29 A, Niederzwehren, Kassel' -> 'Niederzwehren'."""
+    if not addr:
+        return None
+    parts = [p.strip() for p in addr.split(",") if p.strip()]
+    if len(parts) >= 3 and parts[-1].lower().startswith("kassel"):
+        return parts[-2]
+    if len(parts) == 2:
+        return parts[0]
+    return None
+
+
 def ingest_listings(body: IngestBody):
     """Receive listings the Chrome extension scraped from your logged-in
     ImmoScout24 session. Upsert them, and for strong matches (per your filter)
@@ -377,6 +391,17 @@ def ingest_listings(body: IngestBody):
         if not is_new:
             continue
         new_count += 1
+
+        # Derive district from the address ("… , <District>, Kassel") and place
+        # the listing on the map via district-center coordinates.
+        district = _district_from_address(item.address)
+        lat, lng = geocode_district(district)
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE listings SET district = COALESCE(district, ?), "
+                "latitude = ?, longitude = ? WHERE id = ?",
+                (district, lat, lng, listing_id),
+            )
 
         if should_draft_application(item):
             message = generate_application_message(

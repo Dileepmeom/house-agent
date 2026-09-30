@@ -261,7 +261,8 @@ def get_dashboard_data() -> dict:
         """).fetchall()]
 
         actions = [dict(r) for r in conn.execute("""
-            SELECT aq.*, l.address, l.district, l.link, l.latitude, l.longitude
+            SELECT aq.*, l.address, l.district, l.link, l.latitude, l.longitude,
+                   l.floor, l.floor_number, l.availability_date, l.rent_display, l.rooms
             FROM action_queue aq
             LEFT JOIN listings l ON l.id = aq.listing_id
             WHERE aq.status = 'pending'

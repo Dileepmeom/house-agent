@@ -236,12 +236,23 @@ function renderActions(actions) {
     if (a.link) links.push(`<a href="${a.link}" target="_blank">View listing ↗</a>`);
     if (a.gmail_thread_id) links.push(`<a href="https://mail.google.com/mail/u/0/#all/${a.gmail_thread_id}" target="_blank">Open email ↗</a>`);
     const canSend = a.action_type === 'review_application' && a.status === 'approved';
+    // Prefer live listing facts over the frozen description text.
+    const facts = [];
+    if (a.rent_display) facts.push(a.rent_display);
+    if (a.rooms) facts.push(`${a.rooms} rooms`);
+    if (a.floor) {
+      const top = /DG|top/i.test(a.floor), high = a.floor_number != null && a.floor_number > 3;
+      const c = high ? 'var(--red)' : top ? 'var(--amber)' : 'inherit';
+      facts.push(`<span style="color:${c};font-weight:${high||top?600:400}">${a.floor}</span>`);
+    }
+    if (a.availability_date) facts.push(`move-in ${a.availability_date}`);
+    const factLine = facts.length ? facts.join(' · ') : (a.description || '');
     return `
     <div class="action-item" data-id="${a.id}" data-listing-id="${a.listing_id || ''}"
          onmouseenter="focusListing('${a.listing_id || ''}')">
       <div class="t">${a.title}</div>
       ${links.length ? `<div class="links-row">${links.join(' · ')}</div>` : ''}
-      <div class="d">${a.description || ''}</div>
+      <div class="d">${factLine}</div>
       ${a.proposed_reply_de ? `<textarea id="reply-${a.id}">${a.proposed_reply_de}</textarea>` : ''}
       <div class="btn-row">
         <button class="btn-approve" onclick="respond(${a.id}, 'approve')">Approve</button>
