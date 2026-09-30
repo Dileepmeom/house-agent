@@ -210,13 +210,28 @@ function renderMap(listings) {
     if (l.latitude == null || l.longitude == null) return;
     const marker = L.marker([l.latitude, l.longitude]).addTo(markersLayer)
       .bindPopup(`<b>${l.address}</b><br>${l.rent_display || ''}<br>${l.app_status || 'new'}`);
+    // Hover/click a marker -> highlight and scroll to its row in the table below.
+    marker.on('mouseover', () => { marker.openPopup(); highlightRow(l.id, true); });
+    marker.on('click', () => highlightRow(l.id, true));
     markersById[l.id] = marker;
   });
 }
 
+// Highlight the table row for a listing; optionally scroll it into view.
+function highlightRow(listingId, scroll) {
+  let matched = null;
+  document.querySelectorAll('#listingsBody tr').forEach(tr => {
+    const on = tr.dataset.listingId === listingId;
+    tr.classList.toggle('highlight', on);
+    if (on) matched = tr;
+  });
+  if (scroll && matched) matched.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return matched;
+}
+
+// Click a table row -> highlight it AND focus the map on its marker.
 function focusListing(listingId) {
-  document.querySelectorAll('#listingsBody tr').forEach(tr =>
-    tr.classList.toggle('highlight', tr.dataset.listingId === listingId));
+  highlightRow(listingId, false);
   const marker = markersById[listingId];
   if (marker) {
     map.setView(marker.getLatLng(), 14, { animate: true });
