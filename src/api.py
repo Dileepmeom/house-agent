@@ -217,6 +217,20 @@ def respond_to_action(action_id: int, response: ActionResponse):
             """, (now, action_id))
             return {"status": "dismissed"}
 
+        elif response.action == "sent":
+            # You sent the application yourself (via the extension autofill on
+            # the ImmoScout page). Clear it from the queue and mark applied.
+            conn.execute("""
+                UPDATE action_queue SET status = 'done', resolved_at = ?
+                WHERE id = ?
+            """, (now, action_id))
+            if action["application_id"]:
+                conn.execute(
+                    "UPDATE applications SET status = 'applied', date_applied = ?, last_update = ? WHERE id = ?",
+                    (now, now, action["application_id"])
+                )
+            return {"status": "marked_sent"}
+
         raise HTTPException(400, "Invalid action")
 
 
@@ -247,91 +261,30 @@ def sync_now():
     }
 
 
-@app.post("/api/actions/{action_id}/send")
-def send_action(action_id: int):
+@app.get("/api/actions/approved-links")
+def approved_links():
     """
-    Explicitly send ONE approved application to the landlord via ImmoScout24.
-    You must click this yourself per listing (or use send-all-approved) —
-    nothing here runs unattended.
+    Return the approved applications that are ready to send, with their
+    ImmoScout24 links. The dashboard opens these so you can autofill with the
+    Chrome extension and click send yourself.
+
+    Sending is intentionally NOT automated here: ImmoScout24 blocks headless
+    browsers, and messages to landlords always go out on your own click.
     """
-    from scraper_immoscout import send_approved_application
-
-    with get_conn() as conn:
-        action = conn.execute(
-            "SELECT aq.*, l.source_id, l.address FROM action_queue aq "
-            "LEFT JOIN listings l ON l.id = aq.listing_id WHERE aq.id = ?",
-            (action_id,)
-        ).fetchone()
-
-    if not action:
-        raise HTTPException(404, "Action not found")
-    if action["action_type"] != "review_application":
-        raise HTTPException(400, "This action isn't an application to send")
-    if not action["source_id"]:
-        raise HTTPException(400, "No source_id on this listing — can't submit via ImmoScout24")
-
-    try:
-        ok = asyncio.run(send_approved_application(action["source_id"]))
-    except Exception as e:
-        log.error(f"Send crashed for action {action_id}: {e}")
-        raise HTTPException(502, f"Send crashed: {e}. Check data/scraper.log for details.")
-
-    if not ok:
-        raise HTTPException(
-            502,
-            "Send failed — check data/scraper.log. Common causes: not logged into "
-            "ImmoScout24 yet (run src/login_immoscout.py), or this listing has no "
-            "real ImmoScout24 link (manually-tracked listings can't be auto-sent)."
-        )
-
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE action_queue SET status = 'done', resolved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?",
-            (action_id,)
-        )
-
-    return {"status": "sent", "listing": action["address"]}
-
-
-@app.post("/api/actions/send-all-approved")
-def send_all_approved():
-    """
-    Send every 'review_application' action you've already approved on the
-    dashboard, one after another. Still requires you to click this button —
-    nothing sends unless you trigger it.
-    """
-    from scraper_immoscout import send_approved_application
-
     with get_conn() as conn:
         rows = conn.execute("""
-            SELECT aq.id, l.address, l.source_id
+            SELECT aq.id as action_id, l.address, l.link, l.source_id
             FROM action_queue aq
             LEFT JOIN listings l ON l.id = aq.listing_id
             JOIN applications a ON a.id = aq.application_id
             WHERE aq.action_type = 'review_application'
               AND aq.status = 'approved' AND a.status = 'approved'
+            ORDER BY aq.created_at
         """).fetchall()
 
-    results = []
-    for row in rows:
-        if not row["source_id"]:
-            results.append({"listing": row["address"], "sent": False, "error": "no source_id"})
-            continue
-        try:
-            ok = asyncio.run(send_approved_application(row["source_id"]))
-        except Exception as e:
-            log.error(f"Send crashed for {row['address']}: {e}")
-            results.append({"listing": row["address"], "sent": False, "error": str(e)})
-            continue
-        results.append({"listing": row["address"], "sent": ok})
-        if ok:
-            with get_conn() as conn:
-                conn.execute(
-                    "UPDATE action_queue SET status = 'done', resolved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?",
-                    (row["id"],)
-                )
-
-    return {"attempted": len(results), "results": results}
+    ready = [dict(r) for r in rows if r["link"]]
+    no_link = [dict(r) for r in rows if not r["link"]]
+    return {"ready": ready, "no_link": no_link}
 
 
 @app.get("/api/extension/ping")

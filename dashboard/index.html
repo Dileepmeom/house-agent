@@ -103,7 +103,7 @@
     <div class="panel">
       <div class="panel-head">
         <h2>Needs your input</h2>
-        <button class="btn-send-all" onclick="sendAllApproved()">Send all approved</button>
+        <button class="btn-send-all" onclick="openApprovedToApply()">Open approved to apply</button>
       </div>
       <div id="actions"></div>
     </div>
@@ -235,7 +235,6 @@ function renderActions(actions) {
     const links = [];
     if (a.link) links.push(`<a href="${a.link}" target="_blank">View listing ↗</a>`);
     if (a.gmail_thread_id) links.push(`<a href="https://mail.google.com/mail/u/0/#all/${a.gmail_thread_id}" target="_blank">Open email ↗</a>`);
-    const canSend = a.action_type === 'review_application' && a.status === 'approved';
     // Prefer live listing facts over the frozen description text.
     const facts = [];
     if (a.rent_display) facts.push(a.rent_display);
@@ -247,19 +246,38 @@ function renderActions(actions) {
     }
     if (a.availability_date) facts.push(`move-in ${a.availability_date}`);
     const factLine = facts.length ? facts.join(' · ') : (a.description || '');
-    return `
-    <div class="action-item" data-id="${a.id}" data-listing-id="${a.listing_id || ''}"
-         onmouseenter="focusListing('${a.listing_id || ''}')">
-      <div class="t">${a.title}</div>
-      ${links.length ? `<div class="links-row">${links.join(' · ')}</div>` : ''}
-      <div class="d">${factLine}</div>
-      ${a.proposed_reply_de ? `<textarea id="reply-${a.id}">${a.proposed_reply_de}</textarea>` : ''}
-      <div class="btn-row">
+    const isApproved = a.status === 'approved';
+    const isApp = a.action_type === 'review_application';
+
+    // Approved applications are "ready to send": you open the listing and use
+    // the extension's "Insert my application" autofill, then mark it sent.
+    let buttons;
+    if (isApproved && isApp) {
+      const openBtn = a.link
+        ? `<button class="btn-send" onclick="window.open('${a.link}','_blank')">Open to apply ↗</button>`
+        : `<span style="font-size:11px;color:var(--muted)">no ImmoScout link — apply manually</span>`;
+      buttons = `
+        ${openBtn}
+        <button class="btn-approve" onclick="respond(${a.id}, 'sent')">Mark sent</button>
+        <button class="btn-dismiss" onclick="respond(${a.id}, 'dismiss')">Dismiss</button>`;
+    } else {
+      buttons = `
         <button class="btn-approve" onclick="respond(${a.id}, 'approve')">Approve</button>
         ${a.proposed_reply_de ? `<button class="btn-edit" onclick="respond(${a.id}, 'edit')">Save edits & approve</button>` : ''}
-        ${canSend ? `<button class="btn-send" onclick="sendOne(${a.id})">Send now</button>` : ''}
-        <button class="btn-dismiss" onclick="respond(${a.id}, 'dismiss')">Dismiss</button>
-      </div>
+        <button class="btn-dismiss" onclick="respond(${a.id}, 'dismiss')">Dismiss</button>`;
+    }
+
+    const tag = isApproved
+      ? `<span class="badge approved" style="margin-left:6px">approved · ready to send</span>` : '';
+
+    return `
+    <div class="action-item${isApproved ? ' highlight' : ''}" data-id="${a.id}" data-listing-id="${a.listing_id || ''}"
+         onmouseenter="focusListing('${a.listing_id || ''}')">
+      <div class="t">${a.title}${tag}</div>
+      ${links.length ? `<div class="links-row">${links.join(' · ')}</div>` : ''}
+      <div class="d">${factLine}</div>
+      ${!isApproved && a.proposed_reply_de ? `<textarea id="reply-${a.id}">${a.proposed_reply_de}</textarea>` : ''}
+      <div class="btn-row">${buttons}</div>
     </div>
   `;
   }).join('');
@@ -300,21 +318,28 @@ async function respond(id, action) {
   loadDashboard();
 }
 
-async function sendOne(id) {
-  if (!confirm('Send this application to the landlord now? This cannot be undone.')) return;
-  const res = await fetch(`${API}/api/actions/${id}/send`, { method: 'POST' });
-  const result = await res.json();
-  alert(result.detail || result.status || JSON.stringify(result));
-  loadDashboard();
-}
-
-async function sendAllApproved() {
-  if (!confirm('Send every approved application to its landlord now? This cannot be undone.')) return;
-  const res = await fetch(`${API}/api/actions/send-all-approved`, { method: 'POST' });
-  const result = await res.json();
-  alert(`Attempted ${result.attempted ?? 0} send(s). See console for details.`);
-  console.log(result);
-  loadDashboard();
+// Open all approved-and-ready listings in tabs so you can autofill + send each
+// with the Chrome extension. Sending stays your click — this only opens pages.
+async function openApprovedToApply() {
+  const res = await fetch(`${API}/api/actions/approved-links`);
+  const data = await res.json();
+  const ready = data.ready || [];
+  const noLink = data.no_link || [];
+  if (!ready.length) {
+    alert(
+      'No approved applications with an ImmoScout link are ready to send.\n\n' +
+      'Approve a drafted application first, then use this to open it.' +
+      (noLink.length ? `\n\n(${noLink.length} approved item(s) have no ImmoScout link — apply to those manually.)` : '')
+    );
+    return;
+  }
+  if (!confirm(
+    `Open ${ready.length} approved listing(s) in new tabs?\n\n` +
+    `On each page, use the extension's "Insert my application" to fill the ` +
+    `message, then click ImmoScout's Send button. Come back and "Mark sent".` +
+    (noLink.length ? `\n\n(${noLink.length} approved item(s) have no link and are skipped.)` : '')
+  )) return;
+  ready.forEach(r => window.open(r.link, '_blank'));
 }
 
 const IMMOSCOUT_SEARCH_URL =

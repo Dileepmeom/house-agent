@@ -265,8 +265,10 @@ def get_dashboard_data() -> dict:
                    l.floor, l.floor_number, l.availability_date, l.rent_display, l.rooms
             FROM action_queue aq
             LEFT JOIN listings l ON l.id = aq.listing_id
-            WHERE aq.status = 'pending'
-            ORDER BY aq.created_at DESC
+            WHERE aq.status IN ('pending', 'approved')
+            ORDER BY
+              CASE aq.status WHEN 'pending' THEN 0 ELSE 1 END,
+              aq.created_at DESC
         """).fetchall()]
 
         recent_emails = [dict(r) for r in conn.execute("""
